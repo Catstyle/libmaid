@@ -1,41 +1,63 @@
 #include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
 #include "maid.h"
 #include "echo.pb.h"
 
-using maid::channel::Channel;
-using maid::controller::Controller;
+using maid::Channel;
+using maid::Controller;
+
+int count = 0;
+int success_count = 0;
 
 class Closure : public google::protobuf::Closure
 {
 public:
-    Closure(google::protobuf::Message* response)
-        :response_(response)
+    Closure(maid::Controller* controller, EchoRequest* request, EchoResponse* response)
+        :controller_(controller),
+        request_(request),
+        response_(response)
     {
     }
+
     void Run()
     {
-        //printf("%s\n", response_->DebugString().c_str());
+        //printf("==========\n%s\n-------\n%s\n", controller()->meta_data().DebugString().c_str(), response()->DebugString().c_str());
+        printf("%s\n", controller_->ErrorText().c_str());
+        if (!controller_->Failed()) {
+            //printf("success count:%d\n", ++success_count);
+            count++;
+        }
+        //printf("count:%d\n", ++count);
+        if (count == 1000000) {
+            exit(0);
+        }
+        delete request_;
+        delete response_;
+        delete controller_;
     }
 
 private:
-    google::protobuf::Message* response_;
+    maid::Controller* controller_;
+    EchoRequest* request_;
+    EchoResponse* response_;
 };
 
 
 int main()
 {
-    Channel* channel = new Channel(EV_DEFAULT);
-    int32_t fd = channel->Connect("127.0.0.1", 8888);
-    for(int i = 0; ; ++i){
-        Controller* controller = new Controller(EV_DEFAULT);
-        controller->set_fd(fd);
+    Channel* channel = new Channel();
+    channel->Connect("127.0.0.1", 8888, true);
+    for(int i = 0; i < 1000000; ++i){
+        channel->Update();
+        Controller* controller = new Controller();
         EchoRequest* request = new EchoRequest();
         EchoResponse* response = new EchoResponse();
-        Closure* closure = new Closure(response);
+        Closure* closure = new Closure(controller, request, response);
         EchoService_Stub* stub = new EchoService_Stub(channel);
         request->set_message("hello");
         stub->Echo(controller, request, response, closure);
-        ev_run(EV_DEFAULT, 1);
     }
+
+    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 }

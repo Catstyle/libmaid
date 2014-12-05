@@ -1,147 +1,64 @@
-#include <stdio.h>
-#include "controller.h"
+#include "maid/controller.h"
+#include "controllerimpl.h"
 
-using maid::controller::Controller;
-using maid::proto::ControllerMeta;
+using maid::Controller;
 
-Controller::Controller(struct ev_loop* loop)
-    :request_(NULL),
-    response_(NULL),
-    done_(NULL),
-    next_(NULL),
-
-    loop_(loop),
-    ref_(0),
-    in_gc_(false)
+Controller::Controller()
 {
-    gc_.data = this;
-}
-
-Controller::~Controller()
-{
-    assert(("normal delete", 0 >= ref_));
-    if(!meta_data_.stub() && NULL != request_){
-        delete request_;
-    }
-    if(!meta_data_.stub() && NULL != response_){
-        delete response_;
-    }
-    done_ = NULL;
-    next_ = NULL;
-    loop_ = NULL;
+    controller_ = new ControllerImpl();
 }
 
 void Controller::Reset()
 {
+    controller_->Reset();
 }
 
 bool Controller::Failed() const
 {
-    return meta_data_.failed();
+    return controller_->Failed();
 }
 
 std::string Controller::ErrorText() const
 {
-    return meta_data_.error_text();
+    return controller_->ErrorText();
 }
 
 void Controller::StartCancel()
 {
+    return controller_->StartCancel();
 }
 
 void Controller::SetFailed(const std::string& reason)
 {
-    meta_data_.set_failed(true);
-    meta_data_.set_error_text(reason);
+    return controller_->SetFailed(reason);
 }
 
 bool Controller::IsCanceled() const
 {
-    return meta_data_.is_canceled();
+    return controller_->IsCanceled();
 }
 
 void Controller::NotifyOnCancel(google::protobuf::Closure* callback)
 {
+    return controller_->NotifyOnCancel(callback);
 }
 
-ControllerMeta& Controller::meta_data()
+void Controller::set_fd(int64_t fd)
 {
-    return meta_data_;
+    controller_->set_fd(fd);
 }
 
-void Controller::set_request(google::protobuf::Message* request)
+int64_t Controller::fd()
 {
-    request_ = request;
+    return controller_->fd();
 }
 
-void Controller::set_response(google::protobuf::Message* response)
+Controller::~Controller()
 {
-    response_ = response;
+    delete controller_;
 }
 
-void Controller::set_done(google::protobuf::Closure* done)
+maid::proto::ControllerMeta& Controller::meta_data()
 {
-    done_ = done;
-}
-
-void Controller::set_next(Controller* next)
-{
-    next_ = next;
-}
-
-google::protobuf::Message* Controller::request()
-{
-    return request_;
-}
-
-google::protobuf::Message* Controller::response()
-{
-    return response_;
-}
-
-google::protobuf::Closure* Controller::done()
-{
-    return done_;
-}
-
-Controller* Controller::next()
-{
-    return next_;
-}
-
-void Controller::set_fd(int32_t fd)
-{
-    fd_ = fd;
-}
-
-int32_t Controller::fd()
-{
-    return fd_;
-}
-
-void Controller::Destroy()
-{
-    --ref_;
-    if(0 >= ref_ && !in_gc_){
-        ev_check_init(&gc_, OnGC);
-        ev_check_start(loop_, &gc_);
-        in_gc_ = true;
-    }
-}
-
-void Controller::Ref()
-{
-    ++ref_;
-    if(1 <= ref_ && in_gc_){
-        ev_check_stop(loop_, &gc_);
-        in_gc_ = false;
-    }
-
-}
-
-void Controller::OnGC(EV_P_ ev_check* w, int32_t revents)
-{
-    Controller* self = (Controller*)w->data;
-    ev_check_stop(EV_A_ w);
-    delete self;
+    return controller_->meta_data();
 }

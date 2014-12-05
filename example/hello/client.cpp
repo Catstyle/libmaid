@@ -1,40 +1,61 @@
 #include <stdio.h>
 #include "maid.h"
 #include "hello.pb.h"
+#define MAX_CONNECTION 100000
 
-using maid::channel::Channel;
-using maid::controller::Controller;
+using maid::Channel;
+using maid::Controller;
+
+static int32_t count = 0;
 
 class Closure : public google::protobuf::Closure
 {
 public:
-    Closure(google::protobuf::Message* response)
-        :response_(response)
+    Closure(maid::Controller* controller, HelloRequest* request, HelloResponse* response)
+        :response_(response),
+        request_(request),
+        controller_(controller)
     {
     }
+
     void Run()
     {
-        printf("%s\n", response_->DebugString().c_str());
+        if (!controller_->Failed()) {
+            ++count;
+            printf("count:%d\n", count);
+        }
+        if(count + 1 >= MAX_CONNECTION){
+            uv_stop(uv_default_loop());
+        }
+        printf("%s\n", response_->message().c_str());
+
+        delete request_;
+        delete response_;
+        delete controller_;
     }
 
 private:
-    google::protobuf::Message* response_;
+    maid::Controller* controller_;
+    HelloRequest* request_;
+    HelloResponse* response_;
 };
 
 
 int main()
 {
-    Channel* channel = new Channel(EV_DEFAULT);
-    int32_t fd = channel->Connect("127.0.0.1", 8888);
-    Controller* controller = new Controller(EV_DEFAULT);
-    controller->set_fd(fd);
-    HelloRequest* request = new HelloRequest();
-    request->set_message("hello");
-    HelloResponse* response = new HelloResponse();
-    Closure* closure = new Closure(response);
+    Channel* channel = new Channel();
+    channel->Connect("127.0.0.1", 8888, true);
+    for(int32_t i = 0; i < MAX_CONNECTION; i++){
+        channel->Update();
+        Controller* controller = new Controller();
+        HelloRequest* request = new HelloRequest();
+        request->set_message("hello");
+        HelloResponse* response = new HelloResponse();
+        Closure* closure = new Closure(controller, request, response);
 
-    HelloService_Stub* stub = new HelloService_Stub(channel);
-    stub->Hello(controller, request, response, closure);
+        HelloService_Stub* stub = new HelloService_Stub(channel);
+        stub->Hello(controller, request, response, closure);
+    }
+    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-    ev_run(EV_DEFAULT, 0);
 }
