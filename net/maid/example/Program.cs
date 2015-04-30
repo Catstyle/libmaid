@@ -9,52 +9,50 @@ namespace Example
 {
     class Program
     {
+
         static void Main(string[] args)
         {
             Channel channel = new Channel();
             HelloService service = new HelloService();
-            channel.AddMethod("HelloService.Hello", service.Hello);
+            channel.AddMethod<HelloRequest, HelloSerializer>("maid.example.HelloService.HelloNotify", service.HelloNotify);
+            channel.AddMethod<HelloRequest, HelloSerializer, HelloResponse, HelloSerializer>("maid.example.HelloService.HelloRpc", service.HelloRpc);
+            channel.ConnectedCallback.Add(() =>
+            {
+                Console.WriteLine("连接上了");
+            });
+
             channel.Connect("192.168.0.99", 8888);
 
             while (true)
             {
+                channel.Update();
+
                 HelloRequest request = new HelloRequest();
                 request.message = "this message from protobuf-net";
-                long transmitId = channel.CallMethod("HelloService.Hello", channel.Serialize(service.serializer_, request));
-                if (transmitId == -1)
+                try
                 {
-                    if (channel.Connecting)
-                    {
-                        Console.WriteLine("断线了，重连中");
-                    }
+                    channel.CallMethod("maid.example.HelloService.HelloNotify", request);
+                    channel.CallMethod("maid.example.HelloService.HelloRpc", request);
                 }
-                channel.Update();
+                catch (Exception ){ }
+                if (channel.Connecting)
+                {
+                    Console.WriteLine("连接中");
+                }
             }
         }
     }
 
     class HelloService
     {
-        public HelloSerializer serializer_;
-
-        public HelloService()
+        public void HelloRpc(Controller controller, HelloRequest request, HelloResponse response)
         {
-            serializer_ = new HelloSerializer();
+            Console.WriteLine("request: " + request.message + " response: " + response.message);
         }
 
-        public void Hello(Controller controller)
+        public void HelloNotify(Controller controller, HelloRequest request)
         {
-            Console.WriteLine(controller.meta.transmit_id);
-            if (controller.meta.stub)
-            {
-                HelloRequest request = controller.channel.Deserialize<HelloRequest>(serializer_, controller.meta.message);
-                Console.WriteLine(request.message);
-            }
-            else
-            {
-                HelloResponse response = controller.channel.Deserialize<HelloResponse>(serializer_, controller.meta.message);
-                Console.WriteLine(response.message);
-            }
+            Console.WriteLine("notify: " + request.message);
         }
     }
 }

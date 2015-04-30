@@ -1,7 +1,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#include "maid.h"
+#include "maid/maid.h"
 #include "echo.pb.h"
 
 using maid::Channel;
@@ -47,7 +47,7 @@ private:
 int main()
 {
     Channel* channel = new Channel();
-    channel->Connect("127.0.0.1", 8888, true);
+    channel->Connect("127.0.0.1", 5555, true);
     for(int i = 0; i < 1000000; ++i){
         channel->Update();
         Controller* controller = new Controller();
